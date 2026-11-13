@@ -114,7 +114,38 @@ class OperationalController {
             $amounts[$row['class_id']] = $row['amount'];
         }
         $total = $infaqModel->getTotalByMonth($bulanTahun);
-        require __DIR__ . '/../views/operasional/infaq.php';
+
+// Chart data
+$selectedClass = $_GET['class'] ?? '';
+$year = $_GET['year'] ?? date('Y', strtotime($bulanTahun));
+$chartData = [];
+if ($selectedClass !== '') {
+    $chartData = $infaqModel->getMonthlySummaryByClass($selectedClass, $year);
+} else {
+    $chartData = $infaqModel->getMonthlySummary($year);
+}
+
+$selectedClassName = '';
+if ($selectedClass !== '') {
+    foreach ($classes as $class) {
+        if ($class['id'] == $selectedClass) {
+            $selectedClassName = $class['name'];
+            break;
+        }
+    }
+}
+
+$monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+$chartLabels = [];
+$chartValues = [];
+foreach ($chartData as $row) {
+    $monthKey = $row['month'];
+    $monthNum = (int)substr($monthKey, 5, 2);
+    $chartLabels[] = $monthNames[$monthNum - 1];
+    $chartValues[] = (float)($row['total'] ?? 0);
+}
+
+require __DIR__ . '/../views/operasional/infaq.php';
     }
 
     public function saveInfaq() {

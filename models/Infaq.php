@@ -69,4 +69,32 @@ class Infaq {
         }
         return $result;
     }
+
+    public function getMonthlySummaryByClass($classId, $year = null) {
+        $year = $year ?? date('Y');
+        $stmt = $this->db->prepare("
+            SELECT 
+                DATE_FORMAT(bulan_tahun, '%Y-%m') as month,
+                SUM(amount) as total
+            FROM infaq_monthly
+            WHERE class_id = ? AND YEAR(bulan_tahun) = ?
+            GROUP BY DATE_FORMAT(bulan_tahun, '%Y-%m')
+            ORDER BY month
+        ");
+        $stmt->execute([$classId, $year]);
+        $rows = $stmt->fetchAll();
+        $map = [];
+        foreach ($rows as $r) {
+            $map[$r['month']] = (float)$r['total'];
+        }
+        $result = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $key = sprintf('%s-%02d', $year, $m);
+            $result[] = [
+                'month' => $key,
+                'total' => $map[$key] ?? 0
+            ];
+        }
+        return $result;
+    }
 }

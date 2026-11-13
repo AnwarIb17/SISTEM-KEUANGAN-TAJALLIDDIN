@@ -4,6 +4,18 @@ require_once __DIR__ . '/../layouts/header.php';
 
 $bulanTahun = $bulanTahun ?? date('Y-m-01');
 $bulanText = date('F Y', strtotime($bulanTahun));
+
+$selectedClass = $_GET['class'] ?? '';
+$year = $_GET['year'] ?? date('Y', strtotime($bulanTahun));
+$selectedClassName = '';
+if ($selectedClass !== '') {
+    foreach ($classes as $class) {
+        if ($class['id'] == $selectedClass) {
+            $selectedClassName = $class['name'];
+            break;
+        }
+    }
+}
 ?>
 <main>
     <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
@@ -12,10 +24,35 @@ $bulanText = date('F Y', strtotime($bulanTahun));
             Infaq Bulanan
         </h1>
         <div class="d-flex gap-2 align-items-center">
+            <form method="GET" action="infaq" class="d-flex gap-2 align-items-center">
+                <input type="hidden" name="month" value="<?= date('Y-m', strtotime($bulanTahun)) ?>">
+                <label for="classFilter" class="form-label mb-0 me-2">Kelas:</label>
+                <select id="classFilter" name="class" class="form-select form-select-sm" onchange="this.form.submit()">
+                    <option value="">Semua Kelas</option>
+                    <?php foreach ($classes as $class): ?>
+                        <option value="<?= $class['id'] ?>" <?= $selectedClass == $class['id'] ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($class['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </form>
             <label for="monthPicker" class="form-label mb-0 me-2">Pilih Bulan:</label>
             <input type="month" id="monthPicker" class="form-control" 
                    value="<?= date('Y-m', strtotime($bulanTahun)) ?>" 
                    onchange="window.location.href='infaq?month=' + this.value">
+        </div>
+    </div>
+
+    <!-- Grafik perkembangan infaq -->
+    <div class="card mb-4">
+        <div class="card-header bg-white py-3 px-4">
+            <h6 class="mb-0">
+                <i class="fas fa-chart-line me-2"></i>
+                Perkembangan Infaq – <?= $selectedClass ? htmlspecialchars($selectedClassName) : 'Semua Kelas' ?> (<?= $year ?>)
+            </h6>
+        </div>
+        <div class="card-body p-4">
+            <canvas id="infaqChart" height="300"></canvas>
         </div>
     </div>
 
@@ -101,5 +138,68 @@ $bulanText = date('F Y', strtotime($bulanTahun));
         </div>
     </div>
 </main>
+
+<?php require_once __DIR__ . '/../layouts/footer.php'; ?>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('infaqChart').getContext('2d');
+    Chart.defaults.color = '#0e0e0e';
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: <?= json_encode($chartLabels) ?>,
+            datasets: [{
+                label: 'Total Infaq',
+                data: <?= json_encode($chartValues) ?>,
+                borderColor: '#0e0e0e',
+                backgroundColor: 'rgba(14, 14, 14, 0.05)',
+                fill: true,
+                tension: 0.3,
+                pointBackgroundColor: '#0e0e0e',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 1,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Perkembangan Infaq per Bulan',
+                    font: { family: "'Archivo Black', sans-serif", size: 14, weight: 'bold' },
+                    color: '#0e0e0e'
+                },
+                legend: { display: false }
+            },
+            scales: {
+                x: {
+                    ticks: { font: { size: 10 }, color: '#0e0e0e' },
+                    grid: { color: 'rgba(14,14,14,0.1)' }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { 
+                        font: { size: 10 }, 
+                        color: '#0e0e0e',
+                        callback: function(value) {
+                            return 'Rp ' + value.toLocaleString('id-ID');
+                        }
+                    },
+                    grid: { color: 'rgba(14,14,14,0.1)' }
+                }
+            },
+            elements: {
+                line: { borderWidth: 2 },
+                point: { radius: 4, hoverRadius: 6 }
+            }
+        }
+    });
+});
+</script>
 
 <?php require_once __DIR__ . '/../layouts/footer.php'; ?>
