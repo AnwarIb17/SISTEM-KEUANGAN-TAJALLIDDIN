@@ -71,7 +71,8 @@ class Program {
                     WHEN COALESCE(ap.amount_paid, 0) = 0 THEN 'belum'
                     ELSE 'minus'
                 END as status,
-                p.installment_count
+                p.installment_count,
+                ap.tanggal_bayar as payment_date
             FROM alumni a
             INNER JOIN alumni_payments ap ON a.id = ap.alumni_id AND ap.program_id = ?
             LEFT JOIN programs p ON p.id = ?
@@ -89,6 +90,7 @@ class Program {
                 ap.program_id,
                 ap.amount_paid,
                 ap.paid_installments,
+                ap.tanggal_bayar as payment_date,
                 p.name as program_name,
                 p.nominal_per_alumni,
                 p.installment_count,
