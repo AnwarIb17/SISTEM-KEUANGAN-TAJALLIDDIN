@@ -1,0 +1,10 @@
+RewriteEngine On
+RewriteBase /SKT/
+
+# Root directory -> public index
+RewriteRule ^$ /SKT/public/index.php [L]
+
+# Other non-file/directory requests -> public index
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ /SKT/public/index.php?url=$1 [L,QSA]
