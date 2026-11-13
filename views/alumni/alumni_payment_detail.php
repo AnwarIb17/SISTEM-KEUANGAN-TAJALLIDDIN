@@ -139,15 +139,116 @@ require_once __DIR__ . '/../layouts/header.php';
                                         </span>
                                     </td>
                                     <td>
-                                        <a href="program/detail/<?= $p['program_id'] ?>" class="btn btn-sm btn-outline-primary">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#payDetail_<?= $p['program_id'] ?>">
                                             <i class="fas fa-eye"></i>
-                                        </a>
+                                        </button>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
                     </div>
+
+                    <?php foreach ($payments as $p):
+                        $pid = $p['program_id'];
+                        $sched = [];
+                        foreach (($scheduleMap[$pid] ?? []) as $s) {
+                            $sched[(int)$s['installment_number']] = $s;
+                        }
+                        $hist = [];
+                        foreach (($historyMap[$pid] ?? []) as $h) {
+                            $hist[(int)$h['installment_number']] = $h;
+                        }
+                        $rowCount = max(1, (int)($p['installment_count'] ?? 1), $sched ? max(array_keys($sched)) : 0, $hist ? max(array_keys($hist)) : 0);
+                        $defaultNominal = $p['nominal_per_alumni'] / $rowCount;
+                        $legacy = !$sched && !$hist && $p['amount_paid'] > 0;
+                        if ($legacy) {
+                            $rowCount = 1;
+                        }
+                        $totalPaid = 0;
+                        foreach ($hist as $h) {
+                            $totalPaid += (float)$h['paid_amount'];
+                        }
+                        if (!$hist) {
+                            $totalPaid = (float)$p['amount_paid'];
+                        }
+                    ?>
+                    <div class="modal fade" id="payDetail_<?= $pid ?>" tabindex="-1" aria-labelledby="payDetailLabel_<?= $pid ?>" aria-hidden="true">
+                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="payDetailLabel_<?= $pid ?>">
+                                        <i class="fas fa-receipt me-2"></i>Detail Pembayaran: <?= htmlspecialchars($p['program_name']) ?>
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered align-middle">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Cicilan</th>
+                                                    <th>Jatuh Tempo</th>
+                                                    <th class="text-end">Nominal</th>
+                                                    <th class="text-end">Dibayar</th>
+                                                    <th>Tanggal Bayar</th>
+                                                    <th>Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                            <?php if ($legacy): ?>
+                                                <tr>
+                                                    <td class="text-center">1</td>
+                                                    <td class="text-center"><?= $p['payment_date'] ? date('d M Y', strtotime($p['payment_date'])) : '-' ?></td>
+                                                    <td class="text-end"><?= number_format($p['nominal_per_alumni'], 0, ',', '.') ?></td>
+                                                    <td class="text-end"><?= number_format($p['amount_paid'], 0, ',', '.') ?></td>
+                                                    <td class="text-center"><?= $p['payment_date'] ? date('d M Y', strtotime($p['payment_date'])) : '-' ?></td>
+                                                    <td class="text-center">
+                                                        <?php $legacyPaid = $p['amount_paid'] >= $p['nominal_per_alumni']; ?>
+                                                        <span class="badge bg-<?= $legacyPaid ? 'success' : 'warning' ?>"><?= $legacyPaid ? 'LUNAS' : 'PARTIAL' ?></span>
+                                                    </td>
+                                                </tr>
+                                            <?php else: ?>
+                                                <?php for ($i = 1; $i <= $rowCount; $i++):
+                                                    $nominal = isset($sched[$i]) ? (float)$sched[$i]['nominal'] : $defaultNominal;
+                                                    $dueDate = $sched[$i]['due_date'] ?? ($hist[$i]['due_date'] ?? null);
+                                                    $paid = isset($hist[$i]) ? (float)$hist[$i]['paid_amount'] : 0;
+                                                    $paidDate = $hist[$i]['paid_date'] ?? null;
+                                                    $isPaid = $paid >= $nominal;
+                                                    $isPartial = !$isPaid && $paid > 0;
+                                                ?>
+                                                <tr>
+                                                    <td class="text-center"><?= $i ?></td>
+                                                    <td class="text-center"><?= $dueDate ? date('d M Y', strtotime($dueDate)) : '-' ?></td>
+                                                    <td class="text-end"><?= number_format($nominal, 0, ',', '.') ?></td>
+                                                    <td class="text-end"><?= $paid > 0 ? number_format($paid, 0, ',', '.') : '-' ?></td>
+                                                    <td class="text-center"><?= $paidDate ? date('d M Y', strtotime($paidDate)) : '-' ?></td>
+                                                    <td class="text-center">
+                                                        <span class="badge bg-<?= $isPaid ? 'success' : ($isPartial ? 'warning' : 'secondary') ?>">
+                                                            <?= $isPaid ? 'LUNAS' : ($isPartial ? 'PARTIAL' : 'BELUM') ?>
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                                <?php endfor; ?>
+                                            <?php endif; ?>
+                                            </tbody>
+                                            <tfoot>
+                                                <tr>
+                                                    <th colspan="3" class="text-end">Total Dibayar</th>
+                                                    <th class="text-end"><?= number_format($totalPaid, 0, ',', '.') ?></th>
+                                                    <th colspan="2"></th>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
             </div>

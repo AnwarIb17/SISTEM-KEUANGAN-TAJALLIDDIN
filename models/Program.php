@@ -104,6 +104,18 @@ class Program {
         return $stmt->fetchAll();
     }
 
+    // Get installment schedule for a program
+    public function getInstallmentSchedule($programId) {
+        $stmt = $this->db->prepare("
+            SELECT installment_number, nominal, due_date
+            FROM program_installments
+            WHERE program_id = ?
+            ORDER BY installment_number
+        ");
+        $stmt->execute([$programId]);
+        return $stmt->fetchAll();
+    }
+
     // Get payment per installment for a specific alumni & program
     public function getProgramInstallmentHistory($alumniId, $programId) {
         $stmt = $this->db->prepare("
@@ -143,23 +155,58 @@ class Program {
     // Pay an installment (add amount to total paid and update installment count)
     public function payInstallment($alumniId, $programId, $installmentNumber, $amount, $nominalPerAlumni) {
         $program = $this->find($programId);
-        if (!$program) return false;
-        $installmentCount = (int)($program['installment_count'] ?? 1);
-        $installmentCount = max(1, $installmentCount);
+        if (!$program || $amount <= 0) return false;
+        $installmentCount = max(1, (int)($program['installment_count'] ?? 1));
         $installmentAmount = round($nominalPerAlumni / $installmentCount, 2);
-        if ($amount < 0 || $amount > $installmentAmount) return false;
-        $stmt = $this->db->prepare("SELECT amount_paid, paid_installments FROM alumni_payments WHERE alumni_id = ? AND program_id = ?");
+
+        $stmt = $this->db->prepare("SELECT id, amount_paid, paid_installments FROM alumni_payments WHERE alumni_id = ? AND program_id = ?");
         $stmt->execute([$alumniId, $programId]);
         $row = $stmt->fetch();
         if (!$row) return false;
+
+        $paymentId = (int)$row['id'];
         $newAmount = (float)$row['amount_paid'] + $amount;
-        // Prevent exceeding the target per alumni
         if ($newAmount > $nominalPerAlumni) return false;
-        // Prevent paying an installment that is already fully paid
         if ((int)$row['paid_installments'] >= $installmentNumber) return false;
-        $newPaid = max((int)$row['paid_installments'], (int)$installmentNumber);
-        $stmt = $this->db->prepare("UPDATE alumni_payments SET amount_paid = ?, paid_installments = ?, tanggal_bayar = CURDATE(), updated_at = NOW() WHERE alumni_id = ? AND program_id = ?");
-        return $stmt->execute([$newAmount, $newPaid, $alumniId, $programId]);
+
+        // Check existing payment for this installment
+        $stmt = $this->db->prepare("SELECT id, paid_amount FROM alumni_installment_payments WHERE alumni_payment_id = ? AND installment_number = ?");
+        $stmt->execute([$paymentId, $installmentNumber]);
+        $hist = $stmt->fetch();
+        $paidForInstallment = $hist ? (float)$hist['paid_amount'] : 0;
+        if ($paidForInstallment + $amount > $installmentAmount) return false;
+
+        $dueDate = $program['deadline'] ?? date('Y-m-d');
+        $stmt = $this->db->prepare("SELECT due_date FROM program_installments WHERE program_id = ? AND installment_number = ?");
+        $stmt->execute([$programId, $installmentNumber]);
+        $sched = $stmt->fetch();
+        if ($sched && $sched['due_date']) {
+            $dueDate = $sched['due_date'];
+        }
+
+        $this->db->beginTransaction();
+        try {
+            if ($hist) {
+                $stmt = $this->db->prepare("UPDATE alumni_installment_payments SET paid_amount = ?, due_date = ?, paid_date = CURDATE(), updated_at = NOW() WHERE id = ?");
+                $stmt->execute([$paidForInstallment + $amount, $dueDate, $hist['id']]);
+            } else {
+                $stmt = $this->db->prepare("INSERT INTO alumni_installment_payments (alumni_payment_id, program_id, installment_number, due_date, paid_date, paid_amount) VALUES (?, ?, ?, ?, CURDATE(), ?)");
+                $stmt->execute([$paymentId, $programId, $installmentNumber, $dueDate, $amount]);
+            }
+
+            $newPaid = (int)$row['paid_installments'];
+            if ($paidForInstallment + $amount >= $installmentAmount) {
+                $newPaid = max($newPaid, (int)$installmentNumber);
+            }
+
+            $stmt = $this->db->prepare("UPDATE alumni_payments SET amount_paid = ?, paid_installments = ?, tanggal_bayar = CURDATE(), updated_at = NOW() WHERE id = ?");
+            $stmt->execute([$newAmount, $newPaid, $paymentId]);
+            $this->db->commit();
+            return true;
+        } catch (Exception $e) {
+            $this->db->rollBack();
+            return false;
+        }
     }
 
     // Single payment (adds to existing amount_paid, for non-installment or full payment)
