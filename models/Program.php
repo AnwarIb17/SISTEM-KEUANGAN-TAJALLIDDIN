@@ -138,22 +138,34 @@ class Program {
         $row = $stmt->fetch();
         if (!$row) return false;
         $newAmount = (float)$row['amount_paid'] + $amount;
+        // Prevent exceeding the target per alumni
+        if ($newAmount > $nominalPerAlumni) return false;
+        // Prevent paying an installment that is already fully paid
+        if ((int)$row['paid_installments'] >= $installmentNumber) return false;
         $newPaid = max((int)$row['paid_installments'], (int)$installmentNumber);
         $stmt = $this->db->prepare("UPDATE alumni_payments SET amount_paid = ?, paid_installments = ?, tanggal_bayar = CURDATE(), updated_at = NOW() WHERE alumni_id = ? AND program_id = ?");
         return $stmt->execute([$newAmount, $newPaid, $alumniId, $programId]);
     }
 
-    // Single payment (overwrites amount_paid, for non-installment or full payment)
+    // Single payment (adds to existing amount_paid, for non-installment or full payment)
     public function updatePayment($alumniId, $programId, $amount, $nominalPerAlumni) {
-        if ($amount < 0 || $amount > $nominalPerAlumni) {
+        if ($amount < 0) {
             return false;
+        }
+        $stmt = $this->db->prepare("SELECT amount_paid FROM alumni_payments WHERE alumni_id = ? AND program_id = ?");
+        $stmt->execute([$alumniId, $programId]);
+        $row = $stmt->fetch();
+        $currentPaid = $row ? (float)$row['amount_paid'] : 0;
+        $newAmount = $currentPaid + $amount;
+        if ($newAmount > $nominalPerAlumni) {
+            return false; // cannot exceed target per alumni
         }
         $stmt = $this->db->prepare("
             UPDATE alumni_payments 
             SET amount_paid = ?, tanggal_bayar = CURDATE() 
             WHERE alumni_id = ? AND program_id = ?
         ");
-        return $stmt->execute([$amount, $alumniId, $programId]);
+        return $stmt->execute([$newAmount, $alumniId, $programId]);
     }
 
     public function delete($id) {
