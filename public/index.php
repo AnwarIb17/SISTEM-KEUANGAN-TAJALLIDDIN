@@ -56,11 +56,13 @@ $routes = [
     'program/participant/add/(\d+)/(\d+)' => ['ProgramController', 'addParticipant'],
     'program/participant/remove/(\d+)/(\d+)' => ['ProgramController', 'removeParticipant'],
     'program/payment/(\d+)/(\d+)' => ['ProgramController', 'updatePayment'],
+    'program/pay-installment/(\d+)/(\d+)/(\d+)' => ['ProgramController', 'payInstallment'],
     'program/export/(\d+)' => ['ProgramController', 'export'],
     'alumni' => ['AlumniController', 'index'],
     'alumni/create' => ['AlumniController', 'create'],
     'alumni/update' => ['AlumniController', 'update'],
     'alumni/delete/(\d+)' => ['AlumniController', 'delete'],
+    'program/alumni/(\d+)' => ['ProgramController', 'alumniDetail'],
 ];
 
 // Match routes
