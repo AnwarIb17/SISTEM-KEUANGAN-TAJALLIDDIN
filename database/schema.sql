@@ -69,6 +69,7 @@ CREATE TABLE programs (
     name VARCHAR(150) NOT NULL,
     nominal_per_alumni DECIMAL(15,2) NOT NULL,
     deadline DATE,
+    installment_count INT NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -77,6 +78,7 @@ CREATE TABLE alumni_payments (
     alumni_id INT NOT NULL,
     program_id INT NOT NULL,
     amount_paid DECIMAL(15,2) NOT NULL DEFAULT 0,
+    paid_installments INT NOT NULL DEFAULT 0,
     tanggal_bayar DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

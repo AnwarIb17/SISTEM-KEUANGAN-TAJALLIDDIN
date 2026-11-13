@@ -113,6 +113,11 @@ require_once __DIR__ . '/../layouts/header.php';
                             <input type="date" name="deadline" class="form-control"
                                    value="<?= date('Y-m-d', strtotime('+30 days')) ?>">
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">Jumlah Cicilan (1 = tunai)</label>
+                            <input type="number" name="installment_count" class="form-control" min="1" value="1">
+                            <div class="form-text">Jika lebih dari 1, sistem akan membagi nominal menjadi cicilan tetap.</div>
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>

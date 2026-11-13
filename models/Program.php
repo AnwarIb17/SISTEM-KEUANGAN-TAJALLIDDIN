@@ -26,8 +26,8 @@ class Program {
     }
 
     public function create($data) {
-        $stmt = $this->db->prepare("INSERT INTO programs (name, nominal_per_alumni, deadline) VALUES (?, ?, ?)");
-        return $stmt->execute([$data['name'], $data['nominal_per_alumni'], $data['deadline'] ?? null]);
+        $stmt = $this->db->prepare("INSERT INTO programs (name, nominal_per_alumni, deadline, installment_count) VALUES (?, ?, ?, ?)");
+        return $stmt->execute([$data['name'], $data['nominal_per_alumni'], $data['deadline'] ?? null, (int)($data['installment_count'] ?? 1)]);
     }
 
     // Add an alumni to a program (participation)
@@ -55,7 +55,54 @@ class Program {
         return $stmt->execute([$programId, $alumniId]);
     }
 
-    // Get alumni NOT participating in a program
+    // Get alumni payments (including installment info)
+    public function getPayments($programId) {
+        $stmt = $this->db->prepare("
+            SELECT 
+                a.id as alumni_id,
+                a.name as alumni_name,
+                a.contact,
+                COALESCE(ap.amount_paid, 0) as amount_paid,
+                COALESCE(ap.paid_installments, 0) as paid_installments,
+                p.nominal_per_alumni,
+                (COALESCE(ap.amount_paid, 0) - p.nominal_per_alumni) as balance,
+                CASE 
+                    WHEN COALESCE(ap.amount_paid, 0) >= p.nominal_per_alumni THEN 'lunas'
+                    WHEN COALESCE(ap.amount_paid, 0) = 0 THEN 'belum'
+                    ELSE 'minus'
+                END as status,
+                p.installment_count
+            FROM alumni a
+            INNER JOIN alumni_payments ap ON a.id = ap.alumni_id AND ap.program_id = ?
+            LEFT JOIN programs p ON p.id = ?
+            ORDER BY a.name
+        ");
+        $stmt->execute([$programId, $programId]);
+        return $stmt->fetchAll();
+    }
+
+    // Get alumni payments across all programs for a specific alumni
+    public function getAlumniPayments($alumniId) {
+        $stmt = $this->db->prepare("
+            SELECT 
+                ap.id as payment_id,
+                ap.program_id,
+                ap.amount_paid,
+                ap.paid_installments,
+                p.name as program_name,
+                p.nominal_per_alumni,
+                p.installment_count,
+                (COALESCE(ap.amount_paid, 0) - p.nominal_per_alumni) as balance
+            FROM alumni_payments ap
+            INNER JOIN programs p ON ap.program_id = p.id
+            WHERE ap.alumni_id = ?
+            ORDER BY ap.program_id DESC
+        ");
+        $stmt->execute([$alumniId]);
+        return $stmt->fetchAll();
+    }
+
+    // Get available alumni NOT participating in a program
     public function getAvailableAlumni($programId) {
         $stmt = $this->db->prepare("
             SELECT a.* FROM alumni a
@@ -74,38 +121,29 @@ class Program {
     }
 
     public function update($id, $data) {
-        $stmt = $this->db->prepare("UPDATE programs SET name = ?, nominal_per_alumni = ?, deadline = ? WHERE id = ?");
-        return $stmt->execute([$data['name'], $data['nominal_per_alumni'], $data['deadline'] ?? null, $id]);
+        $stmt = $this->db->prepare("UPDATE programs SET name = ?, nominal_per_alumni = ?, deadline = ?, installment_count = ? WHERE id = ?");
+        return $stmt->execute([$data['name'], $data['nominal_per_alumni'], $data['deadline'] ?? null, (int)($data['installment_count'] ?? 1), $id]);
     }
 
-    public function delete($id) {
-        $stmt = $this->db->prepare("DELETE FROM programs WHERE id = ?");
-        return $stmt->execute([$id]);
+    // Pay an installment (add amount to total paid and update installment count)
+    public function payInstallment($alumniId, $programId, $installmentNumber, $amount, $nominalPerAlumni) {
+        $program = $this->find($programId);
+        if (!$program) return false;
+        $installmentCount = (int)($program['installment_count'] ?? 1);
+        $installmentCount = max(1, $installmentCount);
+        $installmentAmount = round($nominalPerAlumni / $installmentCount, 2);
+        if ($amount < 0 || $amount > $installmentAmount) return false;
+        $stmt = $this->db->prepare("SELECT amount_paid, paid_installments FROM alumni_payments WHERE alumni_id = ? AND program_id = ?");
+        $stmt->execute([$alumniId, $programId]);
+        $row = $stmt->fetch();
+        if (!$row) return false;
+        $newAmount = (float)$row['amount_paid'] + $amount;
+        $newPaid = max((int)$row['paid_installments'], (int)$installmentNumber);
+        $stmt = $this->db->prepare("UPDATE alumni_payments SET amount_paid = ?, paid_installments = ?, tanggal_bayar = CURDATE(), updated_at = NOW() WHERE alumni_id = ? AND program_id = ?");
+        return $stmt->execute([$newAmount, $newPaid, $alumniId, $programId]);
     }
 
-    public function getPayments($programId) {
-        $stmt = $this->db->prepare("
-            SELECT 
-                a.id as alumni_id,
-                a.name as alumni_name,
-                a.contact,
-                COALESCE(ap.amount_paid, 0) as amount_paid,
-                p.nominal_per_alumni,
-                (COALESCE(ap.amount_paid, 0) - p.nominal_per_alumni) as balance,
-                CASE 
-                    WHEN COALESCE(ap.amount_paid, 0) >= p.nominal_per_alumni THEN 'lunas'
-                    WHEN COALESCE(ap.amount_paid, 0) = 0 THEN 'belum'
-                    ELSE 'minus'
-                END as status
-            FROM alumni a
-            INNER JOIN alumni_payments ap ON a.id = ap.alumni_id AND ap.program_id = ?
-            LEFT JOIN programs p ON p.id = ?
-            ORDER BY a.name
-        ");
-        $stmt->execute([$programId, $programId]);
-        return $stmt->fetchAll();
-    }
-
+    // Single payment (overwrites amount_paid, for non-installment or full payment)
     public function updatePayment($alumniId, $programId, $amount, $nominalPerAlumni) {
         if ($amount < 0 || $amount > $nominalPerAlumni) {
             return false;
@@ -116,5 +154,10 @@ class Program {
             WHERE alumni_id = ? AND program_id = ?
         ");
         return $stmt->execute([$amount, $alumniId, $programId]);
+    }
+
+    public function delete($id) {
+        $stmt = $this->db->prepare("DELETE FROM programs WHERE id = ?");
+        return $stmt->execute([$id]);
     }
 }
