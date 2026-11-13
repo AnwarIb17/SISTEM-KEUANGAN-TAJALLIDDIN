@@ -22,7 +22,7 @@ class DashboardController {
         $alumniTotal = $operationalModel->getTotalAlumniPayments();           // 3. Total keuangan alumni
         $pemasukkan = $summary['income'];                                     // 4. Pemasukkan
         $pengeluaran = $summary['expense'];                                   // 5. Pengeluaran
-        $sisa = $summary['balance'];                                          // 6. Sisa (infaq + income - expense)
+        $sisa = $infaqTotal + $pemasukkan - $pengeluaran;                                          // 6. Sisa (infaq + income - expense)
 
         // Prepare chart data for infaq
         $infaqChart = $infaqModel->getMonthlySummary($year);

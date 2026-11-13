@@ -1,0 +1,13 @@
+feat: implement periodic payment (cicilan) feature and alumni payment detail page
+
+- Add installment_count column to programs table (default 1)
+- Add paid_installments column to alumni_payments table (default 0)
+- Update Program model with create, update, getPayments, getAlumniPayments, payInstallment, and updatePayment methods
+- Add alumniDetail and payInstallment methods to ProgramController
+- Add routes for alumniDetail and payInstallment in public/index.php
+- Create alumni_payment_detail view showing payment details across programs
+- Modify program_detail.php to show installment schedule and payment buttons
+- Update JavaScript to handle installment payments with separate recordInstallmentPayment function
+- Add installment count field to program creation form in program_list.php
+- Update alumni name links to point to alumni detail page
+- Update payment modal to handle both single and installment payments

@@ -58,6 +58,7 @@ class ProgramController {
     public function detail($id) {
         requireAuth();
         $program = $this->programModel->find($id);
+        $program['installment_count'] = $program['installment_count'] ?? 1;
         $payments = $this->programModel->getPayments($id);
 
         // filter by status
@@ -76,6 +77,53 @@ class ProgramController {
         $minus = count(array_filter($allPayments, fn($p) => $p['status'] === 'minus'));
 
         require __DIR__ . '/../views/alumni/program_detail.php';
+    }
+
+    public function alumniDetail($id) {
+        requireAuth();
+        $alumni = $this->alumniModel->find($id);
+        $payments = $this->programModel->getAlumniPayments($id);
+
+        // Fetch installment payment history for each program
+        $historyMap = [];
+        $scheduleMap = [];
+        foreach ($payments as $p) {
+            $historyMap[$p['program_id']] = $this->programModel->getProgramInstallmentHistory($id, $p['program_id']);
+            $scheduleMap[$p['program_id']] = $this->programModel->getInstallmentSchedule($p['program_id']);
+        }
+
+        $totalTarget = 0;
+        $totalPaid = 0;
+        $totalOverdue = 0;
+        foreach ($payments as $p) {
+            $totalTarget += $p['nominal_per_alumni'] ?? 0;
+            $totalPaid += (float)($p['amount_paid'] ?? 0);
+            $totalOverdue += max(0, ($p['nominal_per_alumni'] ?? 0) - ($p['amount_paid'] ?? 0));
+        }
+         
+        $totalOverdue = max(0, $totalOverdue);
+        $status = $totalPaid >= $totalTarget ? 'lunas' : ($totalPaid > 0 ? 'minus' : 'belum');
+
+        require __DIR__ . '/../views/alumni/alumni_payment_detail.php';
+    }
+
+    public function payInstallment($alumniId, $programId, $installmentNumber) {
+        requireAuth();
+        $amount = 0;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['amount'])) {
+            $amount = floatval($_POST['amount']);
+        } elseif (isset($_GET['amount'])) {
+            $amount = floatval($_GET['amount']);
+        }
+        $program = $this->programModel->find($programId);
+        $nominalPerAlumni = $program['nominal_per_alumni'] ?? 0;
+        if ($this->programModel->payInstallment($alumniId, $programId, (int)$installmentNumber, $amount, $nominalPerAlumni)) {
+            $_SESSION['success'] = 'Pembayaran cicilan berhasil dicatat';
+        } else {
+            $_SESSION['error'] = 'Jumlah pembayaran tidak valid atau melebihi cicilan';
+        }
+        redirect("program/detail/$programId");
+        exit;
     }
 
     public function updatePayment($alumniId, $programId) {

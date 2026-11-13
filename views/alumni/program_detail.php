@@ -127,16 +127,24 @@ require_once __DIR__ . '/../layouts/header.php';
                                     <th>Target</th>
                                     <th>Sudah Dibayar</th>
                                     <th>Sisa</th>
+                                    <th>Tanggal Bayar</th>
                                     <th>Status</th>
                                     <th>Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($payments as $index => $p): ?>
+                                <?php
+                                    $installmentCount = (int)($p['installment_count'] ?? 1);
+                                    $paidInstallments = (int)($p['paid_installments'] ?? 0);
+                                    $installmentAmount = $installmentCount > 1 ? round($p['nominal_per_alumni'] / $installmentCount, 2) : $p['nominal_per_alumni'];
+                                    $nextInstallment = $paidInstallments + 1;
+                                    $isFullyPaid = $p['amount_paid'] >= $p['nominal_per_alumni'];
+                                ?>
                                 <tr>
                                     <td><?= $index + 1 ?></td>
                                     <td>
-                                        <a href="#" class="text-decoration-none fw-bold">
+                                        <a href="program/alumni/<?= $p['alumni_id'] ?>" class="text-decoration-none fw-bold">
                                             <?= htmlspecialchars($p['alumni_name']) ?>
                                         </a>
                                     </td>
@@ -149,21 +157,29 @@ require_once __DIR__ . '/../layouts/header.php';
                                         <?= $p['balance'] < 0 ? 'text-danger' : ($p['balance'] > 0 ? 'text-warning' : 'text-success') ?>">
                                         <?= $p['balance'] != 0 ? number_format($p['balance'], 0, ',', '.') : '-' ?>
                                     </td>
+                                    <td class="text-center">
+                                        <?= !empty($p['tanggal_bayar']) ? date('d M Y', strtotime($p['tanggal_bayar'])) : '-' ?>
+                                    </td>
                                     <td>
                                         <span class="badge status-<?= $p['status'] === 'lunas' ? 'lunas' : ($p['status'] === 'minus' ? 'minus' : 'belum') ?>">
                                             <?= $p['status'] === 'lunas' ? 'LUNAS' : ($p['status'] === 'minus' ? 'KURANG' : 'BELUM') ?>
                                         </span>
                                     </td>
                                     <td>
-                                        <?php if ($p['amount_paid'] < $p['nominal_per_alumni']): ?>
-                                        <button class="btn btn-sm btn-outline-success" 
-                                                onclick="recordPayment(<?= $p['alumni_id'] ?>, <?= $program['id'] ?>, <?= $p['nominal_per_alumni'] - $p['amount_paid'] ?>)">
-                                            <i class="fas fa-check"></i> Bayar
-                                        </button>
+                                        <?php if ($isFullyPaid): ?>
+                                            <span class="text-success small fw-bold">
+                                                <i class="fas fa-check-circle me-1"></i> Lunas
+                                            </span>
+                                        <?php elseif ($installmentCount > 1 && $paidInstallments < $installmentCount): ?>
+                                            <button class="btn btn-sm btn-outline-primary" 
+                                                    onclick="recordInstallmentPayment(<?= $p['alumni_id'] ?>, <?= $program['id'] ?>, <?= $nextInstallment ?>, <?= $installmentAmount ?>)">
+                                                <i class="fas fa-check"></i> Bayar Cicilan #<?= $nextInstallment ?>
+                                            </button>
                                         <?php else: ?>
-                                        <span class="text-success small fw-bold">
-                                            <i class="fas fa-check-circle me-1"></i> Lunas
-                                        </span>
+                                            <button class="btn btn-sm btn-outline-success" 
+                                                    onclick="recordPayment(<?= $p['alumni_id'] ?>, <?= $program['id'] ?>, <?= $p['nominal_per_alumni'] - $p['amount_paid'] ?>)">
+                                                <i class="fas fa-check"></i> Bayar
+                                            </button>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -254,11 +270,13 @@ require_once __DIR__ . '/../layouts/header.php';
 let currentAlumniId = null;
 let currentProgramId = null;
 let currentMaxAmount = 0;
+let currentInstallmentNumber = null;
 
 function recordPayment(alumniId, programId, maxAmount) {
     currentAlumniId = alumniId;
     currentProgramId = programId;
     currentMaxAmount = parseInt(maxAmount) || 0;
+    currentInstallmentNumber = null;
     document.getElementById('maxAmountDisplay').textContent = currentMaxAmount.toLocaleString('id-ID');
     document.getElementById('paymentAmount').value = '';
     document.getElementById('paymentAmount').max = currentMaxAmount;
@@ -293,6 +311,34 @@ function recordPayment(alumniId, programId, maxAmount) {
     }
 }
 
+function recordInstallmentPayment(alumniId, programId, installmentNumber, installmentAmount) {
+    currentAlumniId = alumniId;
+    currentProgramId = programId;
+    currentInstallmentNumber = installmentNumber;
+    currentMaxAmount = parseInt(installmentAmount) || 0;
+    document.getElementById('maxAmountDisplay').textContent = currentMaxAmount.toLocaleString('id-ID');
+    document.getElementById('paymentAmount').value = '';
+    document.getElementById('paymentAmount').max = currentMaxAmount;
+    document.getElementById('paymentError').classList.add('d-none');
+
+    const modalEl = document.getElementById('paymentModal');
+    if (typeof bootstrap !== 'undefined' && typeof bootstrap.Modal === 'function') {
+        new bootstrap.Modal(modalEl).show();
+    } else {
+        // Fallback: open modal manually (Bootstrap JS missing)
+        modalEl.classList.add('show');
+        modalEl.style.display = 'block';
+        modalEl.removeAttribute('aria-hidden');
+        if (!document.getElementById('modal-backdrop')) {
+            const bk = document.createElement('div');
+            bk.id = 'modal-backdrop';
+            bk.className = 'modal-backdrop fade show';
+            bk.style.cssText = 'position:fixed;top:0;left:0;z-index:1040;width:100vw;height:100vh;';
+            document.body.appendChild(bk);
+        }
+    }
+}
+
 document.getElementById('paymentAmount').addEventListener('input', function() {
     const val = parseInt(this.value) || 0;
     const errorEl = document.getElementById('paymentError');
@@ -313,7 +359,11 @@ document.getElementById('confirmPayment').addEventListener('click', function() {
         document.getElementById('paymentError').classList.remove('d-none');
         return;
     }
-    window.location.href = 'program/payment/' + currentAlumniId + '/' + currentProgramId + '?amount=' + val;
+    if (currentInstallmentNumber !== null) {
+        window.location.href = 'program/pay-installment/' + currentAlumniId + '/' + currentProgramId + '/' + currentInstallmentNumber + '?amount=' + val;
+    } else {
+        window.location.href = 'program/payment/' + currentAlumniId + '/' + currentProgramId + '?amount=' + val;
+    }
 });
 </script>
 

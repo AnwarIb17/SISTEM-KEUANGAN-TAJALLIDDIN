@@ -69,6 +69,7 @@ CREATE TABLE programs (
     name VARCHAR(150) NOT NULL,
     nominal_per_alumni DECIMAL(15,2) NOT NULL,
     deadline DATE,
+    installment_count INT NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -77,12 +78,41 @@ CREATE TABLE alumni_payments (
     alumni_id INT NOT NULL,
     program_id INT NOT NULL,
     amount_paid DECIMAL(15,2) NOT NULL DEFAULT 0,
+    paid_installments INT NOT NULL DEFAULT 0,
     tanggal_bayar DATE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (alumni_id) REFERENCES alumni(id) ON DELETE CASCADE,
     FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE,
     UNIQUE KEY unique_alumni_program (alumni_id, program_id)
+) ENGINE=InnoDB;
+
+-- Installment schedule per program (due dates per installment)
+CREATE TABLE program_installments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    program_id INT NOT NULL,
+    installment_number INT NOT NULL,
+    nominal DECIMAL(15,2) NOT NULL,
+    due_date DATE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_program_installment (program_id, installment_number),
+    FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Per-installment payment history for each alumni participant
+CREATE TABLE alumni_installment_payments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    alumni_payment_id INT NOT NULL,
+    program_id INT NOT NULL,
+    installment_number INT NOT NULL,
+    due_date DATE NOT NULL,
+    paid_date DATE NULL,
+    paid_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_alumni_installment (alumni_payment_id, installment_number),
+    FOREIGN KEY (alumni_payment_id) REFERENCES alumni_payments(id) ON DELETE CASCADE,
+    FOREIGN KEY (program_id) REFERENCES programs(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- Seed Data
