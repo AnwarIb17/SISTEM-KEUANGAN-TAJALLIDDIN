@@ -127,6 +127,7 @@ require_once __DIR__ . '/../layouts/header.php';
                                     <th>Target</th>
                                     <th>Sudah Dibayar</th>
                                     <th>Sisa</th>
+                                    <th>Tanggal Bayar</th>
                                     <th>Status</th>
                                     <th>Aksi</th>
                                 </tr>
@@ -155,6 +156,9 @@ require_once __DIR__ . '/../layouts/header.php';
                                     <td class="text-center 
                                         <?= $p['balance'] < 0 ? 'text-danger' : ($p['balance'] > 0 ? 'text-warning' : 'text-success') ?>">
                                         <?= $p['balance'] != 0 ? number_format($p['balance'], 0, ',', '.') : '-' ?>
+                                    </td>
+                                    <td class="text-center">
+                                        <?= !empty($p['tanggal_bayar']) ? date('d M Y', strtotime($p['tanggal_bayar'])) : '-' ?>
                                     </td>
                                     <td>
                                         <span class="badge status-<?= $p['status'] === 'lunas' ? 'lunas' : ($p['status'] === 'minus' ? 'minus' : 'belum') ?>">
