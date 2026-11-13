@@ -83,7 +83,15 @@ class ProgramController {
         requireAuth();
         $alumni = $this->alumniModel->find($id);
         $payments = $this->programModel->getAlumniPayments($id);
-        
+
+        // Fetch installment payment history for each program
+        $historyMap = [];
+        $scheduleMap = [];
+        foreach ($payments as $p) {
+            $historyMap[$p['program_id']] = $this->programModel->getProgramInstallmentHistory($id, $p['program_id']);
+            $scheduleMap[$p['program_id']] = $this->programModel->getInstallmentSchedule($p['program_id']);
+        }
+
         $totalTarget = 0;
         $totalPaid = 0;
         $totalOverdue = 0;
@@ -92,7 +100,7 @@ class ProgramController {
             $totalPaid += (float)($p['amount_paid'] ?? 0);
             $totalOverdue += max(0, ($p['nominal_per_alumni'] ?? 0) - ($p['amount_paid'] ?? 0));
         }
-        
+         
         $totalOverdue = max(0, $totalOverdue);
         $status = $totalPaid >= $totalTarget ? 'lunas' : ($totalPaid > 0 ? 'minus' : 'belum');
 
