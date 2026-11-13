@@ -104,6 +104,19 @@ class Program {
         return $stmt->fetchAll();
     }
 
+    // Get payment per installment for a specific alumni & program
+    public function getProgramInstallmentHistory($alumniId, $programId) {
+        $stmt = $this->db->prepare("
+            SELECT aip.installment_number, aip.due_date, aip.paid_amount, aip.paid_date
+            FROM alumni_installment_payments aip
+            INNER JOIN alumni_payments ap ON aip.alumni_payment_id = ap.id
+            WHERE ap.alumni_id = ? AND aip.program_id = ?
+            ORDER BY aip.installment_number
+        ");
+        $stmt->execute([$alumniId, $programId]);
+        return $stmt->fetchAll();
+    }
+
     // Get available alumni NOT participating in a program
     public function getAvailableAlumni($programId) {
         $stmt = $this->db->prepare("
